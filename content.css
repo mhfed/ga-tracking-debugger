@@ -1,0 +1,50 @@
+/* Dùng CSS variables để đổi màu/size từ popup */
+:root {
+  --ga-border-color: #ef4444; /* đỏ mặc định */
+  --ga-font-size: 10px;
+  --ga-outline-width: 2px;
+  --ga-badge-bg: #111;
+  --ga-badge-color: #fff;
+}
+
+/* Chỉ khi bật debug (gắn attribute ở <html>) */
+/* Bật debug mới áp dụng */
+html[data-ga-debug="1"] [ga-tracking-value]{
+  outline: var(--ga-outline-width, 1px) dashed var(--ga-border-color, #ff3b30);
+  position: relative !important;
+  z-index: 9999;
+}
+
+.ga-debugger-badge {
+  position: absolute;
+  z-index: 2147483647;
+  background: var(--ga-badge-bg, rgba(0, 0, 0, 0.8));
+  color: var(--ga-badge-color, #fff);
+  font: var(--ga-font-size, 10px)/1.2 ui-monospace, Menlo, monospace;
+  padding: 3px 5px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  pointer-events: all;
+  max-width: 350px;
+  word-break: break-all;
+}
+
+.ga-debugger-badge__copy {
+  font-family: inherit;
+  font-size: 9px;
+  background: rgba(255,255,255,0.8);
+  color: #000;
+  border: none;
+  border-radius: 2px;
+  padding: 1px 4px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity .2s;
+}
+.ga-debugger-badge:hover .ga-debugger-badge__copy {
+  opacity: 1;
+}
+

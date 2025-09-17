@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>GA Debugger</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+             margin: 12px; min-width: 240px; }
+      .row { display:flex; align-items:center; justify-content:space-between; margin:8px 0; gap:8px; }
+      label { font-size: 12px; color: #111; }
+      input[type="color"]{ width: 40px; height: 24px; padding:0; border:0; background:none; }
+      input[type="number"]{ width: 72px; }
+      .btn { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; }
+      .btn.primary { background: #111; color: #fff; border-color: #111; }
+      small { color:#666; }
+    </style>
+  </head>
+  <body>
+    <button id="toggle" class="btn primary">Enable</button>
+
+    <div class="row">
+      <label>Màu viền</label>
+      <input id="color" type="color" value="#ef4444" />
+    </div>
+
+    <div class="row">
+      <label>Màu nền badge</label>
+      <input id="badgeBgColor" type="color" value="#ffc107" />
+    </div>
+
+    <div class="row">
+      <label>Độ mờ nền (0-1)</label>
+      <input id="badgeBgOpacity" type="range" min="0" max="1" step="0.1" value="0.9" />
+    </div>
+
+    <div class="row">
+      <label>Màu chữ badge</label>
+      <input id="badgeColor" type="color" value="#d32f2f" />
+    </div>
+
+    <div class="row">
+      <label>Cỡ chữ (badge)</label>
+      <input id="fontSize" type="number" min="8" max="16" step="1" value="10" />
+    </div>
+
+    <div class="row">
+      <label>Độ dày viền (px)</label>
+      <input id="borderWidth" type="number" min="1" max="4" step="1" value="2" />
+    </div>
+
+    <div class="row">
+      <label>Chỉ hiện badge khi hover</label>
+      <input id="hoverOnly" type="checkbox" />
+    </div>
+
+    <button id="apply" class="btn">Áp dụng</button>
+    <div style="margin-top:8px"><small>Phím tắt: <b>Alt+Shift+G</b> để bật/tắt nhanh.</small></div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
+
