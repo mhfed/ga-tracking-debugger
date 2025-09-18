@@ -3,6 +3,7 @@
   --ga-border-color: #ef4444; /* đỏ mặc định */
   --ga-font-size: 10px;
   --ga-outline-width: 2px;
+  --ga-highlight-bg: rgba(239, 68, 68, 0.2);
   --ga-badge-bg: #111;
   --ga-badge-color: #fff;
 }
@@ -10,6 +11,7 @@
 /* Bật debug mới áp dụng */
 html[data-ga-debug="1"] .ga-debugger-highlight {
   outline: var(--ga-outline-width, 1px) dashed var(--ga-border-color, #ff3b30);
+  background-color: var(--ga-highlight-bg) !important;
   display: inline-block; /* Force element to have dimensions */
 }
 
@@ -47,7 +49,7 @@ html[data-ga-debug="1"] .ga-debugger-highlight {
   color: #000;
   border: none;
   border-radius: 2px;
-  padding: 1px 4px;
+  padding: 1px;
   cursor: pointer;
   opacity: 0.7;
   transition: opacity .2s;

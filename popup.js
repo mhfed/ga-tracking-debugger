@@ -32,7 +32,18 @@ async function sendToActive(type, payload) {
 async function getState() {
   return new Promise(resolve => {
     chrome.storage.local.get('gaDebugger', ({ gaDebugger }) => {
-      resolve(gaDebugger || { enabled:false, color:'#ef4444', fontSize:10, borderWidth:2, badgeBgColor: '#ffc107', badgeBgOpacity: 0.9, badgeColor: '#d32f2f' });
+      resolve(gaDebugger || { 
+        enabled:false, 
+        color:'#ef4444', 
+        borderWidth:2, 
+        highlightBgColor: '#ef4444', 
+        highlightBgOpacity: 0.2,
+        showAll: false,
+        badgeBgColor: '#ffc107', 
+        badgeBgOpacity: 0.9, 
+        badgeColor: '#d32f2f',
+        fontSize:10, 
+      });
     });
   });
 }
@@ -53,11 +64,14 @@ function debounce(func, wait) {
     enabled: document.getElementById('enabled'),
     settingsPanel: document.getElementById('settings-panel'),
     color: document.getElementById('color'),
+    borderWidth: document.getElementById('borderWidth'),
+    highlightBgColor: document.getElementById('highlightBgColor'),
+    highlightBgOpacity: document.getElementById('highlightBgOpacity'),
+    showAll: document.getElementById('showAll'),
     badgeBgColor: document.getElementById('badgeBgColor'),
     badgeBgOpacity: document.getElementById('badgeBgOpacity'),
     badgeColor: document.getElementById('badgeColor'),
     fontSize: document.getElementById('fontSize'),
-    borderWidth: document.getElementById('borderWidth'),
   };
 
   // Initial State
@@ -75,11 +89,14 @@ function debounce(func, wait) {
     const payload = {
       ...(await getState()),
       color: elements.color.value,
+      borderWidth: Number(elements.borderWidth.value),
+      highlightBgColor: elements.highlightBgColor.value,
+      highlightBgOpacity: Number(elements.highlightBgOpacity.value),
+      showAll: elements.showAll.checked,
       badgeBgColor: elements.badgeBgColor.value,
       badgeBgOpacity: Number(elements.badgeBgOpacity.value),
       badgeColor: elements.badgeColor.value,
       fontSize: Number(elements.fontSize.value),
-      borderWidth: Number(elements.borderWidth.value),
     };
     sendToActive('APPLY', payload);
   }, 200);
@@ -96,10 +113,13 @@ function debounce(func, wait) {
     elements.settingsPanel.classList.toggle('hidden', !s.enabled);
     
     elements.color.value = s.color;
+    elements.borderWidth.value = s.borderWidth;
+    elements.highlightBgColor.value = s.highlightBgColor;
+    elements.highlightBgOpacity.value = s.highlightBgOpacity;
+    elements.showAll.checked = s.showAll;
     elements.badgeBgColor.value = s.badgeBgColor;
     elements.badgeBgOpacity.value = s.badgeBgOpacity;
     elements.badgeColor.value = s.badgeColor;
     elements.fontSize.value = s.fontSize;
-    elements.borderWidth.value = s.borderWidth;
   }
 })();

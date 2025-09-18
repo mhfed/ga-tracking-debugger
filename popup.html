@@ -80,8 +80,20 @@
           <label for="borderWidth">Độ dày (px)</label>
           <input id="borderWidth" type="number" min="1" max="4" step="1" value="2" />
         </div>
+        <div class="row">
+          <label for="highlightBgColor">Màu nền highlight</label>
+          <input id="highlightBgColor" type="color" value="#ef4444" />
+        </div>
+        <div class="row">
+          <label for="highlightBgOpacity">Độ mờ nền</label>
+          <input id="highlightBgOpacity" type="range" min="0" max="1" step="0.05" value="0.2" />
+        </div>
 
         <h3>Cài đặt Badge</h3>
+        <div class="row">
+          <label for="showAll">Hiện tất cả badge</label>
+          <input id="showAll" type="checkbox" />
+        </div>
         <div class="row">
           <label for="badgeBgColor">Màu nền</label>
           <input id="badgeBgColor" type="color" value="#ffc107" />
@@ -96,7 +108,7 @@
         </div>
         <div class="row">
           <label for="fontSize">Cỡ chữ (px)</label>
-          <input id="fontSize" type="number" min="8" max="16" step="1" value="10" />
+          <input id="fontSize" type="number" min="6" max="16" step="1" value="10" />
         </div>
       </div>
       <div class="footer">
