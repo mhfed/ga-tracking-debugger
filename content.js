@@ -16,6 +16,13 @@ function debounce(func, wait) {
 const debouncedUpdateAllBadgePositions = debounce(updateAllBadgePositions, 100);
 const debouncedScanAndHighlight = debounce(scanAndHighlight, 200);
 
+function getDevicePrefix() {
+    const breakpoint = 768; // Common tablet breakpoint
+    if (window.innerWidth < breakpoint) {
+        return "mb";
+    }
+    return "";
+}
 
 // --- Mode-specific state ---
 let globalBadge = null; // For single-badge mode
@@ -106,7 +113,8 @@ function destroyGlobalBadge() {
 function showSingleBadgeFor(el) {
   if (!globalBadge) return;
   const value = el.getAttribute('ga-tracking-value');
-  globalBadge.innerHTML = `<span>${value.replace(/</g, '&lt;')}</span><button class="ga-debugger-badge__copy">Copy</button>`;
+  const prefix = getDevicePrefix();
+  globalBadge.innerHTML = `<span>${prefix}${value.replace(/</g, '&lt;')}</span><button class="ga-debugger-badge__copy">Copy</button>`;
   
   globalBadge.querySelector('.ga-debugger-badge__copy').onclick = (e) => {
     e.stopPropagation();
@@ -139,7 +147,8 @@ function createMultiBadges() {
 
         const badge = document.createElement('div');
         badge.className = 'ga-debugger-badge visible'; // Always visible in this mode
-        badge.innerHTML = `<span>${value.replace(/</g, '&lt;')}</span><button class="ga-debugger-badge__copy">Copy</button>`;
+        const prefix = getDevicePrefix();
+        badge.innerHTML = `<span>${prefix}${value.replace(/</g, '&lt;')}</span><button class="ga-debugger-badge__copy">Copy</button>`;
 
         badge.querySelector('.ga-debugger-badge__copy').onclick = (e) => {
             e.stopPropagation();
@@ -163,6 +172,12 @@ function destroyMultiBadges() {
 
 function updateAllBadgePositions() {
     for (const [el, badge] of elementDataMap.entries()) {
+        const value = el.getAttribute('ga-tracking-value');
+        const prefix = getDevicePrefix();
+        const span = badge.querySelector('span');
+        if (span) {
+            span.textContent = `${prefix}${value.replace(/</g, '&lt;')}`;
+        }
         repositionBadge(el, badge);
     }
 }
