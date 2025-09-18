@@ -32,7 +32,7 @@ async function sendToActive(type, payload) {
 async function getState() {
   return new Promise(resolve => {
     chrome.storage.local.get('gaDebugger', ({ gaDebugger }) => {
-      resolve(gaDebugger || { enabled:false, color:'#ef4444', fontSize:10, borderWidth:2, hoverOnly:false, badgeBgColor: '#ffc107', badgeBgOpacity: 0.9, badgeColor: '#d32f2f' });
+      resolve(gaDebugger || { enabled:false, color:'#ef4444', fontSize:10, borderWidth:2, badgeBgColor: '#ffc107', badgeBgOpacity: 0.9, badgeColor: '#d32f2f' });
     });
   });
 }
@@ -58,7 +58,6 @@ function debounce(func, wait) {
     badgeColor: document.getElementById('badgeColor'),
     fontSize: document.getElementById('fontSize'),
     borderWidth: document.getElementById('borderWidth'),
-    hoverOnly: document.getElementById('hoverOnly'),
   };
 
   // Initial State
@@ -67,11 +66,8 @@ function debounce(func, wait) {
 
   // Event Listeners
   elements.enabled.onchange = async () => {
-    // Get current state to build the optimistic state
     const s = await getState();
-    // Immediately render the UI based on the new switch position for a responsive feel
     render({ ...s, enabled: elements.enabled.checked });
-    // Send the command to the content script to sync the state in the background
     sendToActive('TOGGLE');
   };
 
@@ -84,7 +80,6 @@ function debounce(func, wait) {
       badgeColor: elements.badgeColor.value,
       fontSize: Number(elements.fontSize.value),
       borderWidth: Number(elements.borderWidth.value),
-      hoverOnly: elements.hoverOnly.checked,
     };
     sendToActive('APPLY', payload);
   }, 200);
@@ -106,6 +101,5 @@ function debounce(func, wait) {
     elements.badgeColor.value = s.badgeColor;
     elements.fontSize.value = s.fontSize;
     elements.borderWidth.value = s.borderWidth;
-    elements.hoverOnly.checked = s.hoverOnly;
   }
 })();

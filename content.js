@@ -1,172 +1,161 @@
 // Globals
 let isDebuggerActive = false;
-let currentSettings = defaults();
-const elementDataMap = new Map();
+let globalBadge = null;
+let hideTimer = null;
+let currentTarget = null;
 let domObserver = null;
-let globalHideTimer = null;
-
-const universalHide = () => {
-  globalHideTimer = setTimeout(() => {
-    for (const data of elementDataMap.values()) {
-      data.badge.style.display = 'none';
-    }
-  }, 200);
-};
 
 (async function init() {
-  currentSettings = await getState();
-  applySettings(currentSettings, true);
+  const settings = await getState();
+  applySettings(settings, true);
 })();
 
 function applySettings(opts, isInitial = false) {
-  currentSettings = opts;
   const html = document.documentElement;
+  updateCssVariables(opts);
 
-  // Always apply CSS variables
-  const style = html.style;
+  if (isInitial && !opts.enabled) return;
+  
+  if (opts.enabled) {
+    html.setAttribute('data-ga-debug', '1');
+    if (!isDebuggerActive) {
+      createGlobalBadge();
+      startEventListeners();
+      isDebuggerActive = true;
+    }
+    scanAndHighlight();
+  } else {
+    html.removeAttribute('data-ga-debug');
+    if (isDebuggerActive) {
+      destroyGlobalBadge();
+      stopEventListeners();
+      isDebuggerActive = false;
+    }
+    unhighlightAll();
+  }
+}
+
+function updateCssVariables(opts) {
+  const style = document.documentElement.style;
   style.setProperty('--ga-border-color', opts.color);
   style.setProperty('--ga-badge-bg', hexToRgba(opts.badgeBgColor, opts.badgeBgOpacity));
   style.setProperty('--ga-badge-color', opts.badgeColor);
   style.setProperty('--ga-font-size', opts.fontSize + 'px');
   style.setProperty('--ga-outline-width', opts.borderWidth + 'px');
-
-  if (isInitial && !opts.enabled) return;
-
-  if (opts.enabled) {
-    html.setAttribute('data-ga-debug', '1');
-    if (!isDebuggerActive) {
-      window.addEventListener('resize', debouncedUpdateBadges);
-      window.addEventListener('scroll', debouncedUpdateBadges, true);
-      startObserver();
-      isDebuggerActive = true;
-    }
-  } else {
-    html.removeAttribute('data-ga-debug');
-    if (isDebuggerActive) {
-      window.removeEventListener('resize', debouncedUpdateBadges);
-      window.removeEventListener('scroll', debouncedUpdateBadges, true);
-      stopObserver();
-      isDebuggerActive = false;
-    }
-  }
-
-  html.classList.toggle('ga-hover-only', !!opts.hoverOnly);
-  updateBadges();
 }
 
-function updateBadges() {
-  destroyBadges();
-  if (!currentSettings.enabled) return;
-
-  const trackedElements = document.querySelectorAll('[data-ga-debug="1"] [ga-tracking-value]');
-  trackedElements.forEach(el => {
-    const value = el.getAttribute('ga-tracking-value');
-    if (!value) return;
-
-    const badge = document.createElement('div');
-    badge.className = 'ga-debugger-badge';
-    badge.innerHTML = `<span>${value.replace(/</g, '&lt;')}</span><button class="ga-debugger-badge__copy">Copy</button>`;
-
-    badge.querySelector('.ga-debugger-badge__copy').onclick = (e) => {
-      e.stopPropagation();
-      navigator.clipboard.writeText(value).then(() => {
-        badge.querySelector('.ga-debugger-badge__copy').textContent = 'Copied!';
-        setTimeout(() => { badge.querySelector('.ga-debugger-badge__copy').textContent = 'Copy'; }, 1500);
-      });
-    };
-    
-    document.body.appendChild(badge);
-    
-    const data = { badge, listeners: null };
-    elementDataMap.set(el, data);
-    repositionBadge(el, badge);
-
-    if (currentSettings.hoverOnly) {
-      badge.style.display = 'none';
-
-      const show = () => {
-        clearTimeout(globalHideTimer);
-        // Hide all other visible badges before showing the new one
-        for (const otherData of elementDataMap.values()) {
-          if (otherData.badge !== badge) {
-            otherData.badge.style.display = 'none';
-          }
-        }
-        badge.style.display = 'inline-flex';
-        repositionBadge(el, badge);
-      };
-
-      el.addEventListener('mouseenter', show);
-      el.addEventListener('mouseleave', universalHide);
-      badge.addEventListener('mouseenter', show);
-      badge.addEventListener('mouseleave', universalHide);
-      
-      data.listeners = { show, universalHide };
-    } else {
-      badge.style.display = 'inline-flex';
-    }
-  });
-}
-
-function repositionBadge(el, badge) {
-  const rect = el.getBoundingClientRect();
-  const badgeHeight = badge.offsetHeight;
-  const badgeWidth = badge.offsetWidth;
-
-  // Center the badge within the element
-  let top = rect.top + window.scrollY + (rect.height - badgeHeight) / 2;
-  let left = rect.left + window.scrollX + (rect.width - badgeWidth) / 2;
+function createGlobalBadge() {
+  if (globalBadge) return;
+  globalBadge = document.createElement('div');
+  globalBadge.className = 'ga-debugger-badge';
+  document.body.appendChild(globalBadge);
   
-  badge.style.left = `${left}px`;
-  badge.style.top = `${top}px`;
+  globalBadge.addEventListener('mouseenter', () => clearTimeout(hideTimer));
+  globalBadge.addEventListener('mouseleave', hideBadge);
 }
 
-function startObserver() {
-  if (domObserver) return;
-  domObserver = new MutationObserver(debouncedUpdateBadges);
-  domObserver.observe(document.body, {
-    childList: true,
-    subtree: true,
-  });
+function destroyGlobalBadge() {
+  if (globalBadge) {
+    globalBadge.remove();
+    globalBadge = null;
+  }
 }
 
-function stopObserver() {
+function startEventListeners() {
+  document.addEventListener('mouseover', handleMouseOver);
+  window.addEventListener('scroll', handleScroll, true);
+  
+  domObserver = new MutationObserver(debouncedScanAndHighlight);
+  domObserver.observe(document.body, { childList: true, subtree: true });
+}
+
+function stopEventListeners() {
+  document.removeEventListener('mouseover', handleMouseOver);
+  window.removeEventListener('scroll', handleScroll, true);
   if (domObserver) {
     domObserver.disconnect();
     domObserver = null;
   }
 }
 
-function destroyBadges() {
-  clearTimeout(globalHideTimer);
-  for (const [el, data] of elementDataMap.entries()) {
-    if (data.listeners) {
-      el.removeEventListener('mouseenter', data.listeners.show);
-      el.removeEventListener('mouseleave', data.listeners.universalHide);
-      data.badge.removeEventListener('mouseenter', data.listeners.show);
-      data.badge.removeEventListener('mouseleave', data.listeners.universalHide);
-    }
-    data.badge.remove();
+function handleMouseOver(e) {
+  const target = e.target.closest('[ga-tracking-value]');
+  
+  clearTimeout(hideTimer);
+
+  if (target) {
+    currentTarget = target;
+    showBadgeFor(target);
+  } else if (!globalBadge.contains(e.target)) {
+    hideBadge();
   }
-  elementDataMap.clear();
+}
+
+function handleScroll() {
+    if (currentTarget && globalBadge.classList.contains('visible')) {
+        repositionBadge(currentTarget);
+    }
+}
+
+function showBadgeFor(el) {
+  const value = el.getAttribute('ga-tracking-value');
+  globalBadge.innerHTML = `<span>${value.replace(/</g, '&lt;')}</span><button class="ga-debugger-badge__copy">Copy</button>`;
+  
+  globalBadge.querySelector('.ga-debugger-badge__copy').onclick = (e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(value);
+    globalBadge.querySelector('.ga-debugger-badge__copy').textContent = 'Copied!';
+    setTimeout(() => { globalBadge.querySelector('.ga-debugger-badge__copy').textContent = 'Copy'; }, 1500);
+  };
+
+  repositionBadge(el);
+  globalBadge.classList.add('visible');
+}
+
+function hideBadge() {
+  hideTimer = setTimeout(() => {
+    globalBadge.classList.remove('visible');
+    currentTarget = null;
+  }, 100);
+}
+
+function repositionBadge(el) {
+  const rect = el.getBoundingClientRect();
+  const badgeHeight = globalBadge.offsetHeight;
+  const badgeWidth = globalBadge.offsetWidth;
+
+  let top = rect.top + window.scrollY + (rect.height - badgeHeight) / 2;
+  let left = rect.left + window.scrollX + (rect.width - badgeWidth) / 2;
+  
+  globalBadge.style.top = `${top}px`;
+  globalBadge.style.left = `${left}px`;
+}
+
+function scanAndHighlight() {
+  unhighlightAll(true);
+  const trackedElements = document.querySelectorAll('[ga-tracking-value]');
+  trackedElements.forEach(el => el.classList.add('ga-debugger-highlight'));
+}
+
+function unhighlightAll(keepIfActive = false) {
+  document.querySelectorAll('.ga-debugger-highlight').forEach(el => {
+    if (keepIfActive && el === currentTarget) return;
+    el.classList.remove('ga-debugger-highlight');
+  });
 }
 
 chrome.runtime.onMessage.addListener(async (msg) => {
   const s = await getState();
-  let next;
+  let next = s;
+  
   if (msg.type === 'TOGGLE') {
     next = { ...s, enabled: !s.enabled };
   } else if (msg.type === 'APPLY') {
     next = { ...s, ...msg.payload };
-  } else if (msg.type === 'REQUEST_STATE') {
-    chrome.runtime.sendMessage({ type: 'STATE', payload: s });
-    return;
   }
   
-  if (next) {
-    await chrome.storage.local.set({ gaDebugger: next });
-    applySettings(next);
-  }
+  await chrome.storage.local.set({ gaDebugger: next });
+  applySettings(next);
 });
 
 function debounce(func, wait) {
@@ -177,22 +166,18 @@ function debounce(func, wait) {
     timeout = setTimeout(later, wait);
   };
 }
-const debouncedUpdateBadges = debounce(updateBadges, 150);
+const debouncedScanAndHighlight = debounce(scanAndHighlight, 200);
 
 function hexToRgba(hex = '#000000', alpha = 1) {
-  if (!/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
-    return `rgba(0,0,0,${alpha})`;
-  }
+  if (!/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) return `rgba(0,0,0,${alpha})`;
   let c = hex.substring(1).split('');
-  if (c.length === 3) {
-    c = [c[0], c[0], c[1], c[1], c[2], c[2]];
-  }
+  if (c.length === 3) c = [c[0], c[0], c[1], c[1], c[2], c[2]];
   c = '0x' + c.join('');
   return `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${alpha})`;
 }
 
 function defaults() {
-  return { enabled: false, color: '#ef4444', fontSize: 10, borderWidth: 2, hoverOnly: false, badgeBgColor: '#ffc107', badgeBgOpacity: 0.9, badgeColor: '#d32f2f' };
+  return { enabled: false, color: '#ef4444', fontSize: 10, borderWidth: 2, badgeBgColor: '#ffc107', badgeBgOpacity: 0.9, badgeColor: '#d32f2f' };
 }
 
 async function getState() {

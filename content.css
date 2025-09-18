@@ -7,12 +7,10 @@
   --ga-badge-color: #fff;
 }
 
-/* Chỉ khi bật debug (gắn attribute ở <html>) */
 /* Bật debug mới áp dụng */
-html[data-ga-debug="1"] [ga-tracking-value]{
+html[data-ga-debug="1"] .ga-debugger-highlight {
   outline: var(--ga-outline-width, 1px) dashed var(--ga-border-color, #ff3b30);
-  position: relative !important;
-  z-index: 9999;
+  display: inline-block; /* Force element to have dimensions */
 }
 
 .ga-debugger-badge {
@@ -30,6 +28,16 @@ html[data-ga-debug="1"] [ga-tracking-value]{
   pointer-events: all;
   max-width: 350px;
   word-break: break-all;
+  transition: opacity 0.2s, transform 0.2s;
+  opacity: 0;
+  transform: translateY(-5px);
+  visibility: hidden;
+}
+
+.ga-debugger-badge.visible {
+    opacity: 1;
+    transform: translateY(0);
+    visibility: visible;
 }
 
 .ga-debugger-badge__copy {
