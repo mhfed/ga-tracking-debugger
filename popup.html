@@ -4,58 +4,110 @@
     <meta charset="utf-8" />
     <title>GA Debugger</title>
     <style>
-      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
-             margin: 12px; min-width: 240px; }
-      .row { display:flex; align-items:center; justify-content:space-between; margin:8px 0; gap:8px; }
-      label { font-size: 12px; color: #111; }
-      input[type="color"]{ width: 40px; height: 24px; padding:0; border:0; background:none; }
-      input[type="number"]{ width: 72px; }
-      .btn { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; }
-      .btn.primary { background: #111; color: #fff; border-color: #111; }
-      small { color:#666; }
+      :root { --primary-color: #3b82f6; }
+      body {
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        margin: 0;
+        min-width: 280px;
+        background-color: #f9fafb;
+        color: #1f2937;
+      }
+      .header {
+        padding: 12px 16px;
+        background-color: #fff;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .header_title {
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .content { padding: 8px 16px 16px; }
+      .row {
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        margin: 12px 0;
+        gap: 8px;
+      }
+      label { font-size: 13px; }
+      h3 {
+        font-size: 12px;
+        font-weight: 600;
+        color: #4b5563;
+        margin: 16px 0 4px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid #e5e7eb;
+        text-transform: uppercase;
+      }
+      input[type="color"]{ width: 32px; height: 24px; padding: 0; border: 1px solid #d1d5db; border-radius: 4px; overflow: hidden; background: none; cursor: pointer; }
+      input[type="number"]{ width: 60px; padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 4px; }
+      input[type="range"]{ flex-grow: 1; }
+
+      /* Toggle Switch */
+      .switch { position: relative; display: inline-block; width: 38px; height: 22px; }
+      .switch input { opacity: 0; width: 0; height: 0; }
+      .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: all 0.3s ease-in-out; border-radius: 22px; }
+      .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: all 0.3s ease-in-out; border-radius: 50%; }
+      input:checked + .slider { background-color: var(--primary-color); }
+      input:checked + .slider:before { transform: translateX(16px); }
+
+      #settings-panel { transition: opacity .3s ease; }
+      #settings-panel.hidden { opacity: 0.5; pointer-events: none; }
+      small { color: #6b7280; }
+      .footer { text-align: center; padding-top: 8px; }
     </style>
   </head>
   <body>
-    <button id="toggle" class="btn primary">Enable</button>
-
-    <div class="row">
-      <label>Màu viền</label>
-      <input id="color" type="color" value="#ef4444" />
+    <div class="header">
+      <span class="header_title">GA Tracking Debugger</span>
+      <label class="switch">
+        <input type="checkbox" id="enabled">
+        <span class="slider"></span>
+      </label>
     </div>
 
-    <div class="row">
-      <label>Màu nền badge</label>
-      <input id="badgeBgColor" type="color" value="#ffc107" />
+    <div class="content">
+      <div id="settings-panel">
+        <h3>Cài đặt Viền</h3>
+        <div class="row">
+          <label for="color">Màu viền</label>
+          <input id="color" type="color" value="#ef4444" />
+        </div>
+        <div class="row">
+          <label for="borderWidth">Độ dày (px)</label>
+          <input id="borderWidth" type="number" min="1" max="4" step="1" value="2" />
+        </div>
+
+        <h3>Cài đặt Badge</h3>
+        <div class="row">
+          <label for="hoverOnly">Chỉ hiện khi hover</label>
+          <input id="hoverOnly" type="checkbox" />
+        </div>
+        <div class="row">
+          <label for="badgeBgColor">Màu nền</label>
+          <input id="badgeBgColor" type="color" value="#ffc107" />
+        </div>
+        <div class="row">
+          <label for="badgeBgOpacity">Độ mờ nền</label>
+          <input id="badgeBgOpacity" type="range" min="0" max="1" step="0.1" value="0.9" />
+        </div>
+        <div class="row">
+          <label for="badgeColor">Màu chữ</label>
+          <input id="badgeColor" type="color" value="#d32f2f" />
+        </div>
+        <div class="row">
+          <label for="fontSize">Cỡ chữ (px)</label>
+          <input id="fontSize" type="number" min="8" max="16" step="1" value="10" />
+        </div>
+      </div>
+      <div class="footer">
+        <small>Phím tắt: <b>Alt+Shift+G</b></small>
+      </div>
     </div>
-
-    <div class="row">
-      <label>Độ mờ nền (0-1)</label>
-      <input id="badgeBgOpacity" type="range" min="0" max="1" step="0.1" value="0.9" />
-    </div>
-
-    <div class="row">
-      <label>Màu chữ badge</label>
-      <input id="badgeColor" type="color" value="#d32f2f" />
-    </div>
-
-    <div class="row">
-      <label>Cỡ chữ (badge)</label>
-      <input id="fontSize" type="number" min="8" max="16" step="1" value="10" />
-    </div>
-
-    <div class="row">
-      <label>Độ dày viền (px)</label>
-      <input id="borderWidth" type="number" min="1" max="4" step="1" value="2" />
-    </div>
-
-    <div class="row">
-      <label>Chỉ hiện badge khi hover</label>
-      <input id="hoverOnly" type="checkbox" />
-    </div>
-
-    <button id="apply" class="btn">Áp dụng</button>
-    <div style="margin-top:8px"><small>Phím tắt: <b>Alt+Shift+G</b> để bật/tắt nhanh.</small></div>
-
+    
     <script src="popup.js"></script>
   </body>
 </html>
