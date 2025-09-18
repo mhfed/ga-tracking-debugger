@@ -10,9 +10,17 @@
 
 /* Bật debug mới áp dụng */
 html[data-ga-debug="1"] .ga-debugger-highlight {
+  /* This class is now just a marker, styles are applied to the overlay */
+}
+
+.ga-debugger-overlay {
+  position: absolute;
+  z-index: 9998; /* Below badges, but above most content */
   outline: var(--ga-outline-width, 1px) dashed var(--ga-border-color, #ff3b30);
   background-color: var(--ga-highlight-bg) !important;
-  display: inline-block; /* Force element to have dimensions */
+  pointer-events: none; /* Crucial: Clicks go through the overlay */
+  margin: 0;
+  padding: 0;
 }
 
 .ga-debugger-badge {

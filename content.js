@@ -1,69 +1,246 @@
-// Globals
+// ====================================================================================
+// GA Tracking Debugger - Content Script (v3 - Refactored for Stability)
+// ====================================================================================
+
+// --- Globals ---
 let isDebuggerActive = false;
 let currentSettings = defaults();
 let domObserver = null;
+let singleBadge = null;
+let hideBadgeTimer = null;
+const trackedElements = new Map(); // Stores { overlay, badge, visualTarget }
 
 // --- Utility Functions ---
 function debounce(func, wait) {
   let timeout;
-  return function executedFunction(...args) {
-    const later = () => { clearTimeout(timeout); func(...args); };
+  return (...args) => {
     clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
+    timeout = setTimeout(() => func.apply(this, args), wait);
   };
 }
+const debouncedUpdate = debounce(update, 150);
 
-const debouncedUpdateAllBadgePositions = debounce(updateAllBadgePositions, 100);
-const debouncedScanAndHighlight = debounce(scanAndHighlight, 200);
-
-function getDevicePrefix() {
-    const breakpoint = 768; // Common tablet breakpoint
-    if (window.innerWidth < breakpoint) {
-        return "mb";
-    }
-    return "";
-}
-
-// --- Mode-specific state ---
-let globalBadge = null; // For single-badge mode
-let hideTimer = null; // For single-badge mode
-let currentTarget = null; // For single-badge mode
-const elementDataMap = new Map(); // For multi-badge mode
-
+// --- Initialization ---
 (async function init() {
   currentSettings = await getState();
-  applySettings(currentSettings, true);
+  // Apply initial settings once the page is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => applySettings(currentSettings));
+  } else {
+    applySettings(currentSettings);
+  }
 })();
 
-function applySettings(opts, isInitial = false) {
-  const previousSettings = currentSettings;
+
+// --- Core Logic ---
+function applySettings(opts) {
   currentSettings = opts;
-
   updateCssVariables(opts);
-
-  if (isInitial && !opts.enabled) return;
-
-  // Cleanup previous state if mode is changing or debugger is turning off
-  if (opts.enabled === false || (opts.enabled && previousSettings.showAll !== opts.showAll)) {
-    stopEventListeners();
-    destroyBadges();
-  }
   
-  unhighlightAll();
+  // Always stop first to ensure a clean, predictable state
+  stop(); 
   
-  if (opts.enabled) {
-    document.documentElement.setAttribute('data-ga-debug', '1');
-    if (!isDebuggerActive || previousSettings.showAll !== opts.showAll) {
-        startEventListeners();
-        createBadges();
-    }
-    isDebuggerActive = true;
-    scanAndHighlight();
-  } else {
-    document.documentElement.removeAttribute('data-ga-debug');
-    isDebuggerActive = false;
+  // If the new settings have debugging enabled, start the required services
+  if (currentSettings.enabled) {
+    start();
   }
 }
+
+function start() {
+    if (isDebuggerActive) return; // Safeguard
+    isDebuggerActive = true;
+    document.documentElement.setAttribute('data-ga-debug', '1');
+
+    // Setup listeners
+    window.addEventListener('scroll', debouncedUpdate, true);
+    window.addEventListener('resize', debouncedUpdate, true);
+    domObserver = new MutationObserver(debouncedUpdate);
+    domObserver.observe(document.body, { childList: true, subtree: true, attributes: false });
+    
+    // Setup mode-specific logic
+    if (!currentSettings.showAll) {
+        createSingleBadge();
+        document.addEventListener('mouseover', handleMouseOver);
+    }
+
+    // Initial render
+    update();
+}
+
+function stop() {
+    isDebuggerActive = false;
+    document.documentElement.removeAttribute('data-ga-debug');
+    
+    // Remove all listeners
+    document.removeEventListener('mouseover', handleMouseOver);
+    window.removeEventListener('scroll', debouncedUpdate, true);
+    window.removeEventListener('resize', debouncedUpdate, true);
+    domObserver?.disconnect();
+    domObserver = null;
+
+    // Destroy all DOM elements
+    destroySingleBadge();
+    clearAllTrackedElements();
+}
+
+function update() {
+    if (!isDebuggerActive) return;
+
+    const elementsOnPage = new Set(document.querySelectorAll('[ga-tracking-value]'));
+
+    // 1. Cleanup: Remove data/elements for items no longer on the page
+    for (const el of trackedElements.keys()) {
+        if (!elementsOnPage.has(el)) {
+            const data = trackedElements.get(el);
+            data.overlay?.remove();
+            data.badge?.remove();
+            trackedElements.delete(el);
+        }
+    }
+
+    // 2. Add or Update: Process all tracked elements currently visible
+    elementsOnPage.forEach(el => {
+        el.classList.add('ga-debugger-highlight'); // Add marker for hover mode
+        let data = trackedElements.get(el) || {};
+        
+        const visualTarget = findFirstVisibleChild(el) || el;
+        data.visualTarget = visualTarget;
+
+        // Create or update overlay
+        if (!data.overlay) {
+            data.overlay = document.createElement('div');
+            data.overlay.className = 'ga-debugger-overlay';
+            data.overlay.style.pointerEvents = 'none'; 
+            document.body.appendChild(data.overlay);
+        }
+        positionOverlay(data.overlay, visualTarget);
+
+        // Create or update badge (only in showAll mode)
+        if (currentSettings.showAll) {
+            if (!data.badge) {
+                data.badge = createBadgeElement(el);
+                document.body.appendChild(data.badge);
+            }
+            positionBadge(data.badge, visualTarget);
+        } else {
+            // Ensure multi-mode badges are removed if we switched modes
+            data.badge?.remove();
+            data.badge = null;
+        }
+
+        trackedElements.set(el, data);
+    });
+}
+
+
+// --- Element Creation & Positioning ---
+
+function createBadgeElement(el) {
+    const value = el.getAttribute('ga-tracking-value');
+    const prefix = getDevicePrefix();
+    const badge = document.createElement('div');
+    badge.className = 'ga-debugger-badge';
+    badge.innerHTML = `<span>${prefix}${value?.replace(/</g, '&lt;') || ''}</span><button class="ga-debugger-badge__copy">Copy</button>`;
+    
+    badge.querySelector('.ga-debugger-badge__copy').onclick = (e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(value);
+        const btn = e.currentTarget;
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+    };
+
+    if (currentSettings.showAll) {
+        badge.classList.add('visible');
+    }
+    return badge;
+}
+
+function positionOverlay(overlay, target) {
+    const rect = target.getBoundingClientRect();
+    overlay.style.width = `${rect.width}px`;
+    overlay.style.height = `${rect.height}px`;
+    overlay.style.top = `${rect.top + window.scrollY}px`;
+    overlay.style.left = `${rect.left + window.scrollX}px`;
+}
+
+function positionBadge(badge, target) {
+    const rect = target.getBoundingClientRect();
+    badge.style.top = `${rect.top + window.scrollY + (rect.height - badge.offsetHeight) / 2}px`;
+    badge.style.left = `${rect.left + window.scrollX + (rect.width - badge.offsetWidth) / 2}px`;
+}
+
+function clearAllTrackedElements() {
+    for (const data of trackedElements.values()) {
+        data.overlay?.remove();
+        data.badge?.remove();
+    }
+    trackedElements.clear();
+    // Also clean up any stray highlight classes
+    document.querySelectorAll('.ga-debugger-highlight').forEach(el => el.classList.remove('ga-debugger-highlight'));
+}
+
+// --- Single Badge (Hover) Mode Specifics ---
+
+function createSingleBadge() {
+    if (singleBadge) return;
+    singleBadge = createBadgeElement(document.createElement('div')); // Create with dummy element
+    document.body.appendChild(singleBadge);
+    
+    singleBadge.addEventListener('mouseenter', () => clearTimeout(hideBadgeTimer));
+    singleBadge.addEventListener('mouseleave', hideSingleBadge);
+}
+
+function destroySingleBadge() {
+    singleBadge?.remove();
+    singleBadge = null;
+}
+
+function handleMouseOver(e) {
+    const target = e.target.closest('.ga-debugger-highlight');
+    clearTimeout(hideBadgeTimer);
+
+    if (target) {
+        updateSingleBadgeContent(target);
+        const visualTarget = trackedElements.get(target)?.visualTarget || findFirstVisibleChild(target) || target;
+        positionBadge(singleBadge, visualTarget);
+        singleBadge.classList.add('visible');
+    } else if (singleBadge && !singleBadge.contains(e.target)) {
+        hideSingleBadge();
+    }
+}
+
+function updateSingleBadgeContent(el) {
+    if (!singleBadge) return;
+    const value = el.getAttribute('ga-tracking-value');
+    const prefix = getDevicePrefix();
+    singleBadge.querySelector('span').innerHTML = `${prefix}${value.replace(/</g, '&lt;')}`;
+    singleBadge.querySelector('button').onclick = (e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(value);
+        const btn = e.currentTarget;
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+    };
+}
+
+function hideSingleBadge() {
+    hideBadgeTimer = setTimeout(() => {
+        singleBadge?.classList.remove('visible');
+    }, 100);
+}
+
+
+// --- Message Handling & Helpers ---
+
+chrome.runtime.onMessage.addListener(async (msg) => {
+  let s = await getState();
+  let next = s;
+  if (msg.type === 'TOGGLE') next = { ...s, enabled: !s.enabled };
+  if (msg.type === 'APPLY') next = { ...s, ...msg.payload };
+  await chrome.storage.local.set({ gaDebugger: next });
+  applySettings(next);
+});
 
 function updateCssVariables(opts) {
   const style = document.documentElement.style;
@@ -75,201 +252,21 @@ function updateCssVariables(opts) {
   style.setProperty('--ga-font-size', opts.fontSize + 'px');
 }
 
-// --- Badge Management ---
-
-function createBadges() {
-    if (currentSettings.showAll) {
-        createMultiBadges();
-    } else {
-        createGlobalBadge();
-    }
-}
-
-function destroyBadges() {
-    destroyGlobalBadge();
-    destroyMultiBadges();
-}
-
-// --- Single Badge Mode (Hover) ---
-
-function createGlobalBadge() {
-  if (globalBadge) return;
-  globalBadge = document.createElement('div');
-  globalBadge.className = 'ga-debugger-badge';
-  document.body.appendChild(globalBadge);
-  
-  globalBadge.addEventListener('mouseenter', () => clearTimeout(hideTimer));
-  globalBadge.addEventListener('mouseleave', hideSingleBadge);
-}
-
-function destroyGlobalBadge() {
-  if (globalBadge) {
-    globalBadge.remove();
-    globalBadge = null;
-    currentTarget = null;
-  }
-}
-
-function showSingleBadgeFor(el) {
-  if (!globalBadge) return;
-  const value = el.getAttribute('ga-tracking-value');
-  const prefix = getDevicePrefix();
-  globalBadge.innerHTML = `<span>${prefix}${value.replace(/</g, '&lt;')}</span><button class="ga-debugger-badge__copy">Copy</button>`;
-  
-  globalBadge.querySelector('.ga-debugger-badge__copy').onclick = (e) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(value);
-    globalBadge.querySelector('.ga-debugger-badge__copy').textContent = 'Copied!';
-    setTimeout(() => { if(globalBadge) globalBadge.querySelector('.ga-debugger-badge__copy').textContent = 'Copy'; }, 1500);
-  };
-
-  repositionBadge(el, globalBadge);
-  globalBadge.classList.add('visible');
-}
-
-function hideSingleBadge() {
-  hideTimer = setTimeout(() => {
-    if(globalBadge) globalBadge.classList.remove('visible');
-    currentTarget = null;
-  }, 100);
-}
-
-
-// --- Multi Badge Mode (Show All) ---
-
-function createMultiBadges() {
-    const trackedElements = document.querySelectorAll('.ga-debugger-highlight');
-    trackedElements.forEach(el => {
-        if (elementDataMap.has(el)) return; // Already created
-
-        const value = el.getAttribute('ga-tracking-value');
-        if (!value) return;
-
-        const badge = document.createElement('div');
-        badge.className = 'ga-debugger-badge visible'; // Always visible in this mode
-        const prefix = getDevicePrefix();
-        badge.innerHTML = `<span>${prefix}${value.replace(/</g, '&lt;')}</span><button class="ga-debugger-badge__copy">Copy</button>`;
-
-        badge.querySelector('.ga-debugger-badge__copy').onclick = (e) => {
-            e.stopPropagation();
-            navigator.clipboard.writeText(value);
-            badge.querySelector('.ga-debugger-badge__copy').textContent = 'Copied!';
-            setTimeout(() => { badge.querySelector('.ga-debugger-badge__copy').textContent = 'Copy'; }, 1500);
-        };
-        
-        document.body.appendChild(badge);
-        elementDataMap.set(el, badge);
-        repositionBadge(el, badge);
-    });
-}
-
-function destroyMultiBadges() {
-    for (const badge of elementDataMap.values()) {
-        badge.remove();
-    }
-    elementDataMap.clear();
-}
-
-function updateAllBadgePositions() {
-    for (const [el, badge] of elementDataMap.entries()) {
-        const value = el.getAttribute('ga-tracking-value');
-        const prefix = getDevicePrefix();
-        const span = badge.querySelector('span');
-        if (span) {
-            span.textContent = `${prefix}${value.replace(/</g, '&lt;')}`;
+function findFirstVisibleChild(element) {
+    if (element.offsetWidth > 0 || element.offsetHeight > 0) return element;
+    const children = element.querySelectorAll('*');
+    for (const child of children) {
+        if ((child.offsetWidth > 0 || child.offsetHeight > 0) && !['SCRIPT', 'STYLE', 'META', 'LINK'].includes(child.tagName)) {
+            return child;
         }
-        repositionBadge(el, badge);
     }
+    return null;
 }
 
-// --- Event Listeners & Common Functions ---
-
-function startEventListeners() {
-    if (currentSettings.showAll) {
-        window.addEventListener('scroll', debouncedUpdateAllBadgePositions, true);
-        window.addEventListener('resize', debouncedUpdateAllBadgePositions, true);
-    } else {
-        document.addEventListener('mouseover', handleMouseOver);
-        window.addEventListener('scroll', handleSingleBadgeScroll, true);
-    }
-  
-    domObserver = new MutationObserver(debouncedScanAndHighlight);
-    domObserver.observe(document.body, { childList: true, subtree: true });
+function getDevicePrefix() {
+    const breakpoint = 768; 
+    return window.innerWidth < breakpoint ? "mb" : "";
 }
-
-function stopEventListeners() {
-  document.removeEventListener('mouseover', handleMouseOver);
-  window.removeEventListener('scroll', handleSingleBadgeScroll, true);
-  window.removeEventListener('scroll', debouncedUpdateAllBadgePositions, true);
-  window.removeEventListener('resize', debouncedUpdateAllBadgePositions, true);
-  if (domObserver) {
-    domObserver.disconnect();
-    domObserver = null;
-  }
-}
-
-function handleMouseOver(e) {
-  // Guard clause to ensure this only runs in single-badge (hover) mode
-  if (currentSettings.showAll) return;
-
-  const target = e.target.closest('.ga-debugger-highlight');
-  clearTimeout(hideTimer);
-
-  if (target) {
-    currentTarget = target;
-    showSingleBadgeFor(target);
-  } else if (globalBadge && !globalBadge.contains(e.target)) {
-    hideSingleBadge();
-  }
-}
-
-function handleSingleBadgeScroll() {
-    if (currentTarget && globalBadge && globalBadge.classList.contains('visible')) {
-        repositionBadge(currentTarget, globalBadge);
-    }
-}
-
-function repositionBadge(el, badge) {
-  const rect = el.getBoundingClientRect();
-  const badgeHeight = badge.offsetHeight;
-  const badgeWidth = badge.offsetWidth;
-
-  let top = rect.top + window.scrollY + (rect.height - badgeHeight) / 2;
-  let left = rect.left + window.scrollX + (rect.width - badgeWidth) / 2;
-  
-  badge.style.top = `${top}px`;
-  badge.style.left = `${left}px`;
-}
-
-function scanAndHighlight() {
-  const trackedElements = document.querySelectorAll('[ga-tracking-value]');
-  trackedElements.forEach(el => el.classList.add('ga-debugger-highlight'));
-
-  if(isDebuggerActive && currentSettings.showAll) {
-      // Re-create badges for dynamically added elements in 'show all' mode
-      createMultiBadges();
-  }
-}
-
-function unhighlightAll() {
-  document.querySelectorAll('.ga-debugger-highlight').forEach(el => {
-    el.classList.remove('ga-debugger-highlight');
-  });
-}
-
-chrome.runtime.onMessage.addListener(async (msg) => {
-  const s = await getState();
-  let next = s;
-  
-  if (msg.type === 'TOGGLE') {
-    next = { ...s, enabled: !s.enabled };
-  } else if (msg.type === 'APPLY') {
-    next = { ...s, ...msg.payload };
-  }
-  
-    await chrome.storage.local.set({ gaDebugger: next });
-    applySettings(next);
-});
 
 function hexToRgba(hex = '#000000', alpha = 1) {
   if (!/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) return `rgba(0,0,0,${alpha})`;
