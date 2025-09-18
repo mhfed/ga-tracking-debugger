@@ -67,9 +67,12 @@ function debounce(func, wait) {
 
   // Event Listeners
   elements.enabled.onchange = async () => {
-    await sendToActive('TOGGLE');
+    // Get current state to build the optimistic state
     const s = await getState();
-    render(s);
+    // Immediately render the UI based on the new switch position for a responsive feel
+    render({ ...s, enabled: elements.enabled.checked });
+    // Send the command to the content script to sync the state in the background
+    sendToActive('TOGGLE');
   };
 
   const debouncedApply = debounce(async () => {

@@ -3,6 +3,15 @@ let isDebuggerActive = false;
 let currentSettings = defaults();
 const elementDataMap = new Map();
 let domObserver = null;
+let globalHideTimer = null;
+
+const universalHide = () => {
+  globalHideTimer = setTimeout(() => {
+    for (const data of elementDataMap.values()) {
+      data.badge.style.display = 'none';
+    }
+  }, 200);
+};
 
 (async function init() {
   currentSettings = await getState();
@@ -68,7 +77,7 @@ function updateBadges() {
     
     document.body.appendChild(badge);
     
-    const data = { badge, hideTimer: null };
+    const data = { badge, listeners: null };
     elementDataMap.set(el, data);
     repositionBadge(el, badge);
 
@@ -76,23 +85,23 @@ function updateBadges() {
       badge.style.display = 'none';
 
       const show = () => {
-        clearTimeout(data.hideTimer);
+        clearTimeout(globalHideTimer);
+        // Hide all other visible badges before showing the new one
+        for (const otherData of elementDataMap.values()) {
+          if (otherData.badge !== badge) {
+            otherData.badge.style.display = 'none';
+          }
+        }
         badge.style.display = 'inline-flex';
         repositionBadge(el, badge);
       };
 
-      const hide = () => {
-        data.hideTimer = setTimeout(() => {
-          badge.style.display = 'none';
-        }, 100);
-      };
-
       el.addEventListener('mouseenter', show);
-      el.addEventListener('mouseleave', hide);
+      el.addEventListener('mouseleave', universalHide);
       badge.addEventListener('mouseenter', show);
-      badge.addEventListener('mouseleave', hide);
+      badge.addEventListener('mouseleave', universalHide);
       
-      data.listeners = { show, hide };
+      data.listeners = { show, universalHide };
     } else {
       badge.style.display = 'inline-flex';
     }
@@ -129,12 +138,13 @@ function stopObserver() {
 }
 
 function destroyBadges() {
+  clearTimeout(globalHideTimer);
   for (const [el, data] of elementDataMap.entries()) {
     if (data.listeners) {
       el.removeEventListener('mouseenter', data.listeners.show);
-      el.removeEventListener('mouseleave', data.listeners.hide);
+      el.removeEventListener('mouseleave', data.listeners.universalHide);
       data.badge.removeEventListener('mouseenter', data.listeners.show);
-      data.badge.removeEventListener('mouseleave', data.listeners.hide);
+      data.badge.removeEventListener('mouseleave', data.listeners.universalHide);
     }
     data.badge.remove();
   }
