@@ -2,6 +2,7 @@
 let isDebuggerActive = false;
 let currentSettings = defaults();
 const elementDataMap = new Map();
+let domObserver = null;
 
 (async function init() {
   currentSettings = await getState();
@@ -27,6 +28,7 @@ function applySettings(opts, isInitial = false) {
     if (!isDebuggerActive) {
       window.addEventListener('resize', debouncedUpdateBadges);
       window.addEventListener('scroll', debouncedUpdateBadges, true);
+      startObserver();
       isDebuggerActive = true;
     }
   } else {
@@ -34,6 +36,7 @@ function applySettings(opts, isInitial = false) {
     if (isDebuggerActive) {
       window.removeEventListener('resize', debouncedUpdateBadges);
       window.removeEventListener('scroll', debouncedUpdateBadges, true);
+      stopObserver();
       isDebuggerActive = false;
     }
   }
@@ -107,6 +110,22 @@ function repositionBadge(el, badge) {
   
   badge.style.left = `${left}px`;
   badge.style.top = `${top}px`;
+}
+
+function startObserver() {
+  if (domObserver) return;
+  domObserver = new MutationObserver(debouncedUpdateBadges);
+  domObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+}
+
+function stopObserver() {
+  if (domObserver) {
+    domObserver.disconnect();
+    domObserver = null;
+  }
 }
 
 function destroyBadges() {
