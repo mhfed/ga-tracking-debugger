@@ -281,12 +281,12 @@ function defaults() {
     enabled: false, 
     color: '#ef4444', 
     borderWidth: 2, 
-    highlightBgColor: '#ef4444', 
-    highlightBgOpacity: 0.2,
+    highlightBgColor: '#08537d', 
+    highlightBgOpacity: 0.7,
     showAll: false,
-    badgeBgColor: '#ffc107', 
+    badgeBgColor: '#fd12f5', 
     badgeBgOpacity: 0.9, 
-    badgeColor: '#d32f2f',
+    badgeColor: '#ffffff',
     fontSize: 10, 
   };
 }
